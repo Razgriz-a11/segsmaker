@@ -1,5 +1,4 @@
 from pathlib import Path
-import matplotlib
 import subprocess
 import shlex
 import json
@@ -16,36 +15,43 @@ cwd = Path.cwd()
 iRON = os.environ
 SyS = os.system
 
+TCM = '/home/studio-lab-user/.conda/envs/default/lib/libtcmalloc_minimal.so.4'
+VENVLIB = '/tmp/venv/lib'
+VENVBIN = '/tmp/venv/bin'
+
 def setENV():
-    iRON['PYTHONWARNINGS'] = 'ignore'
-
-    def setVAR(var, new, value):
-        current_value = iRON.get(var, '')
-        if new not in current_value:
-            iRON[var] = new + (':' + current_value if current_value else '')
-
-    if ui == 'SDTrainer':
+    if ui in ['FaceFusion', 'SDTrainer']:
+        import matplotlib
         iRON['MPLBACKEND'] = 'gtk3agg'
-        setVAR('LD_PRELOAD', '/home/studio-lab-user/.conda/envs/default/lib/libtcmalloc_minimal.so.4', 'LD_PRELOAD')
 
-    elif ui == 'FaceFusion':
-        iRON['MPLBACKEND'] = 'gtk3agg'
-        iRON.pop('LD_PRELOAD', None)
-        iRON.pop('LD_LIBRARY_PATH', None)
-        iRON['LD_PRELOAD'] = '/home/studio-lab-user/.conda/envs/default/lib/libcublasLt.so.12:' + \
-                                  '/home/studio-lab-user/.conda/envs/default/lib/libcublas.so.12:' + \
-                                  '/home/studio-lab-user/.conda/envs/default/lib/libtcmalloc_minimal.so.4'
-        iRON['LD_LIBRARY_PATH'] = '/home/studio-lab-user/.conda/envs/default/lib'
+        if ui == 'FaceFusion':
+            iRON.pop('LD_PRELOAD', None)
+            iRON.pop('LD_LIBRARY_PATH', None)
 
-    elif ui == 'SwarmUI':
-        setVAR('PATH', '/tmp/venv/bin', '/tmp/venv/bin')
-        setVAR('LD_LIBRARY_PATH', '/tmp/venv/lib:/home/studio-lab-user/.conda/envs/default/lib', 'LD_LIBRARY_PATH')
-        iRON['SWARMPATH'] = str(cwd)
-        iRON['SWARM_NO_VENV'] = 'true'
+            iRON['LD_PRELOAD'] = (
+                '/home/studio-lab-user/.conda/envs/default/lib/libcublasLt.so.12:' +
+                '/home/studio-lab-user/.conda/envs/default/lib/libcublas.so.12:' +
+                '/home/studio-lab-user/.conda/envs/default/lib/libtcmalloc_minimal.so.4'
+            )
+            iRON['LD_LIBRARY_PATH'] = '/home/studio-lab-user/.conda/envs/default/lib:' + iRON.get('LD_LIBRARY_PATH', '')
+
+        else:
+            if 'LD_PRELOAD' not in iRON or TCM not in iRON['LD_PRELOAD']:
+                iRON['LD_PRELOAD'] = TCM
 
     else:
-        setVAR('PATH', '/tmp/venv/bin', '/tmp/venv/bin')
-        setVAR('LD_PRELOAD', '/home/studio-lab-user/.conda/envs/default/lib/libtcmalloc_minimal.so.4', 'LD_PRELOAD')
+        if 'LD_PRELOAD' not in iRON or TCM not in iRON['LD_PRELOAD']:
+            iRON['LD_PRELOAD'] = TCM
+        if 'LD_LIBRARY_PATH' not in iRON or VENVLIB not in iRON['LD_LIBRARY_PATH']:
+            iRON['LD_LIBRARY_PATH'] = VENVLIB + ":" + iRON['LD_LIBRARY_PATH']
+        if VENVBIN not in iRON["PATH"]:
+            iRON["PATH"] = VENVBIN + ":" + iRON["PATH"]
+
+        if ui == 'SwarmUI':
+            iRON['SWARMPATH'] = str(cwd)
+            iRON['SWARM_NO_VENV'] = 'true'
+
+    iRON['PYTHONWARNINGS'] = 'ignore'
 
 def Launch():
     launcher = 'main.py' if ui == 'ComfyUI' else 'launch.py'
@@ -59,7 +65,15 @@ def Launch():
             timer = cwd / "asd/pinggytimer.txt"
             end_time = int(time.time()) + 3600
             SyS(f"echo -n {end_time} > {timer}")
+
+            if ui == 'Forge':
+                FT = cwd / "FT.txt"
+                if not FT.exists():
+                    SyS('pip uninstall -qy transformers')
+                    FT.write_text("blyat")
+
         cmd = f'python3 {launcher} ' + ' '.join(sys.argv[1:])
+
     SyS(cmd)
 
 def sdtrainer_launch():
