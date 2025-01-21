@@ -1,9 +1,17 @@
+from IPython.display import display, Image, clear_output
 from IPython import get_ipython
+from pathlib import Path
+import subprocess
+import argparse
+import shlex
+import json
 import sys
 import os
+import re
 
 SyS = get_ipython().system
 CD = os.chdir
+iRON = os.environ
 
 ENVNAME, ENVBASE, ENVHOME = None, None, None
 env_list = {
@@ -12,7 +20,7 @@ env_list = {
 }
 
 for envname, (envbase, envhome, envvar) in env_list.items():
-    if envvar in os.environ:
+    if envvar in iRON:
         ENVNAME = envname
         ENVBASE = envbase
         ENVHOME = envhome
@@ -25,32 +33,18 @@ if not ENVNAME:
     ENVHOME = str(Path.cwd())
     print("No Kaggle/Colab environment detected. Using local defaults.")
 
-if ENVNAME == 'Colab':
-    for blyat in [
-        'sudo ln -sf /usr/bin/python3.10 /usr/local/bin/python',
-        'sudo ln -sf /usr/bin/python3.10 /usr/bin/python3',
-        'sudo rm -rf /usr/local/lib/python3.10',
-        'sudo ln -sf /usr/local/lib/python3.11 /usr/local/lib/python3.10'
-    ]:
-        SyS(blyat)
-
-from IPython.display import display, Image, clear_output
-from IPython import get_ipython
-from pathlib import Path
-import argparse
-import json
-import sys
-import os
-import re
-
+RST = "\033[0m"
 R = "\033[31m"
 P = "\033[38;5;135m"
-RST = "\033[0m"
+ORANGE = "\033[38;5;208m"
+AR = f'{ORANGE}▶{RST}'
 ERR = f"{P}[{RST}{R}ERROR{RST}{P}]{RST}"
-
 IMG = "https://github.com/gutris1/segsmaker/raw/main/script/SM/loading.png"
-display(Image(url=IMG))
-clear_output(wait=True)
+
+ROOT = Path.home()
+SRE = ROOT / 'GUTRIS1'
+BIN = str(SRE / 'bin')
+PKG = str(SRE / 'lib/python3.10/site-packages')
 
 HOME = Path(ENVHOME)
 BASEPATH = Path(ENVBASE)
@@ -63,7 +57,7 @@ KEY = SRC / 'api-key.json'
 MARKED = SRC / 'marking.json'
 
 USR = Path('/usr/bin')
-STR = Path.home() / '.ipython/profile_default/startup'
+STR = ROOT / '.ipython/profile_default/startup'
 nenen = STR / 'nenen88.py'
 pantat = STR / 'pantat88.py'
 KANDANG = STR / 'KANDANG.py'
@@ -118,6 +112,70 @@ def prevent_silly():
     return (webui_webui, sd_sd), arg3, arg4
 
 
+def PythonPortable():
+    CD(ROOT)
+    SyS('sudo apt -y install aria2 pv lz4')
+
+    url = "https://huggingface.co/pantat88/back_up/resolve/main/python310-torch251-cu121.tar.lz4"
+    fn = Path(url).name
+
+    aria = f'aria2c --console-log-level=error --stderr=true -c -x16 -s16 -k1M -j5 {url} -o {fn}'
+    pv = f'pv {fn} | lz4 -d | tar -xf -'
+
+    Aria2Sub(aria)
+
+    if ENVNAME == "Kaggle":
+        for cmd in [
+            'pip install ipywidgets jupyterlab_widgets --upgrade',
+            'rm -f /usr/lib/python3.10/sitecustomize.py'
+        ]: SyS(f'{cmd}>/dev/null 2>&1')
+    else:
+        print(f'\n{AR} installing Python...')
+
+    SyS(pv)
+    Path(ROOT / fn).unlink()
+
+    if BIN not in iRON["PATH"]:
+        iRON["PATH"] = BIN + ":" + iRON["PATH"]
+
+    if PKG not in iRON["PYTHONPATH"]:
+        iRON["PYTHONPATH"] = PKG + ":" + iRON["PYTHONPATH"]
+
+
+def Aria2Sub(cmd):
+    Aria2Process = subprocess.Popen(
+        shlex.split(cmd),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
+    result = ""
+    print()
+    br = False
+    while True:
+        lines = Aria2Process.stderr.readline()
+        if lines == '' and Aria2Process.poll() is not None:
+            break
+        if lines:
+            result += lines
+            for outputs in lines.splitlines():
+                if re.match(r'\[#\w{6}\s.*\]', outputs):
+                    lines = outputs.splitlines()
+                    for line in lines:
+                        print(f"\r{' '*500}\r {line}", end="")
+                        sys.stdout.flush()
+                    br = True
+                    break
+    if br:
+        print()
+    stripe = result.find("======+====+===========")
+    if stripe:
+        for lines in result[stripe:].splitlines():
+            if '|' in lines and 'OK' in lines:
+                print(f"  {lines}")
+    Aria2Process.wait()
+
+
 def install_tunnel():
     SyS(f'wget -qO {USR}/cl https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64')
     SyS(f'chmod +x {USR}/cl')
@@ -153,7 +211,7 @@ def saving():
         "VENVPATH": VNV,
         "BASEPATH": BASEPATH
     }
-    
+
     with open(KANDANG, 'w') as q:
         for k, v in j.items():
             q.write(f"{k} = '{v}'\n")
@@ -190,63 +248,85 @@ def key_inject(C, H):
 
 
 def sym_link(U, M):
-    links = {
-        'A1111': [
-            f"rm -rf {TMP}/* {M}/Stable-diffusion/tmp_ckpt",
-            f"rm -rf {M}/Lora/tmp_lora {M}/ControlNet",
-            f"mkdir -p {M}/Lora {M}/ESRGAN",
-            f"ln -vs {TMP}/ckpt {M}/Stable-diffusion/tmp_ckpt",
-            f"ln -vs {TMP}/lora {M}/Lora/tmp_lora",
-            f"ln -vs {TMP}/controlnet {M}/ControlNet"
-        ],
+    configs = {
+        'A1111': {
+            'pre': [
+                f'rm -rf {M / "Stable-diffusion/tmp_ckpt"} {M / "Lora/tmp_lora"} {M / "ControlNet"} {TMP}/*'
+            ],
+            'links': [
+                (TMP / "ckpt", M / "Stable-diffusion/tmp_ckpt"),
+                (TMP / "lora", M / "Lora/tmp_lora"),
+                (TMP / "controlnet", M / "ControlNet")
+            ]
+        },
 
-        'ComfyUI': [
-            f"rm -rf {TMP}/* {M}/controlnet {M}/clip {M}/unet",
-            f"rm -rf {M}/checkpoints/tmp_ckpt {M}/loras/tmp_lora",
-            f"ln -vs {TMP}/ckpt {M}/checkpoints/tmp_ckpt",
-            f"ln -vs {TMP}/lora {M}/loras/tmp_lora",
-            f"ln -vs {TMP}/controlnet {M}/controlnet",
-            f"ln -vs {TMP}/clip {M}/clip",
-            f"ln -vs {TMP}/unet {M}/unet",
-            f"ln -vs {M}/checkpoints {M}/checkpoints_symlink"
-        ],
+        'ReForge': {
+            'pre': [
+                f'rm -rf {M / "Stable-diffusion/tmp_ckpt"} {M / "Lora/tmp_lora"} {M / "ControlNet"}',
+                f'rm -rf {M / "svd"} {M / "z123"} {TMP}/*'
+            ],
+            'links': [
+                (TMP / "ckpt", M / "Stable-diffusion/tmp_ckpt"),
+                (TMP / "lora", M / "Lora/tmp_lora"),
+                (TMP / "controlnet", M / "ControlNet"),
+                (TMP / "z123", M / "z123"),
+                (TMP / "svd", M / "svd")
+            ]
+        },
 
-        'Forge': [
-            f"rm -rf {TMP}/* {M}/ControlNet {M}/svd {M}/z123 {M}/clip {M}/unet",
-            f"rm -rf {M}/Stable-diffusion/tmp_ckpt {M}/Lora/tmp_lora",
-            f"mkdir -p {M}/Lora {M}/ESRGAN",
-            f"ln -vs {TMP}/ckpt {M}/Stable-diffusion/tmp_ckpt",
-            f"ln -vs {TMP}/lora {M}/Lora/tmp_lora",
-            f"ln -vs {TMP}/controlnet {M}/ControlNet",
-            f"ln -vs {TMP}/z123 {M}/z123",
-            f"ln -vs {TMP}/svd {M}/svd",
-            f"ln -vs {TMP}/clip {M}/clip",
-            f"ln -vs {TMP}/unet {M}/unet"
-        ],
+        'Forge': {
+            'pre': [
+                f'rm -rf {M / "Stable-diffusion/tmp_ckpt"} {M / "Lora/tmp_lora"} {M / "ControlNet"}',
+                f'rm -rf {M / "svd"} {M / "z123"} {M / "clip"} {M / "unet"} {TMP}/*'
+            ],
+            'links': [
+                (TMP / "ckpt", M / "Stable-diffusion/tmp_ckpt"),
+                (TMP / "lora", M / "Lora/tmp_lora"),
+                (TMP / "controlnet", M / "ControlNet"),
+                (TMP / "z123", M / "z123"),
+                (TMP / "svd", M / "svd"),
+                (TMP / "clip", M / "clip"),
+                (TMP / "unet", M / "unet")
+            ]
+        },
 
-        'ReForge': [
-            f"rm -rf {TMP}/* {M}/ControlNet {M}/svd {M}/z123",
-            f"rm -rf {M}/Stable-diffusion/tmp_ckpt {M}/Lora/tmp_lora",
-            f"mkdir -p {M}/Lora {M}/ESRGAN",
-            f"ln -vs {TMP}/ckpt {M}/Stable-diffusion/tmp_ckpt",
-            f"ln -vs {TMP}/lora {M}/Lora/tmp_lora",
-            f"ln -vs {TMP}/controlnet {M}/ControlNet",
-            f"ln -vs {TMP}/z123 {M}/z123",
-            f"ln -vs {TMP}/svd {M}/svd"
-        ],
+        'ComfyUI': {
+            'pre': [
+                f'rm -rf {M / "checkpoints/tmp_ckpt"} {M / "loras/tmp_lora"} {M / "controlnet"}',
+                f'rm -rf {M / "clip"} {M / "unet"} {TMP}/*'
+            ],
+            'links': [
+                (TMP / "ckpt", M / "checkpoints/tmp_ckpt"),
+                (TMP / "lora", M / "loras/tmp_lora"),
+                (TMP / "controlnet", M / "controlnet"),
+                (TMP / "clip", M / "clip"),
+                (TMP / "unet", M / "unet"),
+                (M / "checkpoints", M / "checkpoints_symlink")
+            ]
+        },
 
-        'SwarmUI': [
-            f"rm -rf {TMP}/* {M}/Stable-Diffusion/tmp_ckpt {M}/clip {M}/unet",
-            f"rm -rf {M}/Lora/tmp_lora {M}/controlnet {M}/clip",
-            f"ln -vs {TMP}/ckpt {M}/Stable-Diffusion/tmp_ckpt",
-            f"ln -vs {TMP}/lora {M}/Lora/tmp_lora",
-            f"ln -vs {TMP}/controlnet {M}/controlnet",
-            f"ln -vs {TMP}/clip {M}/clip",
-            f"ln -vs {TMP}/unet {M}/unet"
-        ]
+        'SwarmUI': {
+            'pre': [
+                f'rm -rf {M / "Stable-Diffusion/tmp_ckpt"} {M / "Lora/tmp_lora"} {M / "controlnet"}',
+                f'rm -rf {M / "clip"} {M / "unet"} {TMP}/*'
+            ],
+            'links': [
+                (TMP / "ckpt", M / "Stable-Diffusion/tmp_ckpt"),
+                (TMP / "lora", M / "Lora/tmp_lora"),
+                (TMP / "controlnet", M / "controlnet"),
+                (TMP / "clip", M / "clip"),
+                (TMP / "unet", M / "unet")
+            ]
+        }
     }
 
-    return links.get(U, [])
+    cfg = configs.get(U)
+    [SyS(f'{cmd}') for cmd in cfg['pre']]
+
+    if U in ['A1111', 'Forge', 'ReForge']:
+        [(M / d).mkdir(parents=True, exist_ok=True) for d in ["Lora", "ESRGAN"]]
+
+    [SyS(f'ln -s {src} {tg}') for src, tg in cfg['links']]
 
 
 def webui_req(U, W, M):
@@ -264,15 +344,11 @@ def webui_req(U, W, M):
         dotnet.chmod(0o755)
         SyS("bash ./dotnet-install.sh --channel 8.0")
 
-    req = sym_link(U, M)
-    for ln in req:
-        SyS(f'{ln} &> /dev/null')
-
+    sym_link(U, M)
     install_tunnel()
 
     scripts = [
         f"https://github.com/gutris1/segsmaker/raw/main/script/SM/controlnet.py {W}/asd",
-        f"https://github.com/gutris1/segsmaker/raw/main/script/KC/venv.py {W}",
         f"https://github.com/gutris1/segsmaker/raw/main/script/KC/segsmaker.py {W}"
     ]
 
@@ -290,8 +366,7 @@ def webui_req(U, W, M):
     ]
 
     line = scripts + upscalers
-    for item in line:
-        download(item)
+    for item in line: download(item)
 
     if U not in ['SwarmUI', 'ComfyUI']:
         SyS(f'rm -f {W}/html/card-no-preview.png')
@@ -310,8 +385,7 @@ def webui_extension(U, W, M):
         for faces in [
             f"https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/codeformer.pth {M}/facerestore_models",
             f"https://github.com/TencentARC/GFPGAN/releases/download/v1.3.4/GFPGANv1.4.pth {M}/facerestore_models"
-        ]:
-            download(faces)
+        ]: download(faces)
 
     else:
         say("<br><b>【{red} Installing Extensions{d} 】{red}</b>")
@@ -340,13 +414,11 @@ def webui_installation(U, S, W, M, E, V):
             f"https://huggingface.co/stabilityai/sd-vae-ft-mse-original/resolve/main/vae-ft-mse-840000-ema-pruned.safetensors {V}"
         ]
 
-    for item in extras:
-        download(item)
+    for item in extras: download(item)
 
     SyS(f"unzip -qo {embzip} -d {E} && rm {embzip}")
 
-    if U != 'SwarmUI':
-        webui_extension(U, W, M)
+    if U != 'SwarmUI': webui_extension(U, W, M)
 
 
 def webui_selection(ui, which_sd):
@@ -369,17 +441,8 @@ def webui_selection(ui, which_sd):
     say(f"<b>【{{red}} Installing {WEBUI.name}{{d}} 】{{red}}</b>")
     clone(repo)
 
-    req = ['pip install gdown aria2', 'apt -y install lz4 pv']
-    if ENVNAME == "Kaggle":
-        req.extend(['pip install ipywidgets jupyterlab_widgets --upgrade', 'rm -f /usr/lib/python3.10/sitecustomize.py'])
-    else:
-        req.append('apt -y install python3.10-venv')
-    for cmd in req:
-        SyS(f'{cmd} &> /dev/null')
-
     webui_installation(ui, which_sd, WEBUI, MODELS, EMB, VAE)
 
-    get_ipython().run_line_magic('run', str(WEBUI / 'venv.py'))
     say("<br><b>【{red} Done{d} 】{red}</b>")
     tempe()
     CD(HOME)
@@ -427,6 +490,12 @@ if selection is None or civitai_key is None:
     sys.exit()
 
 webui, sd = selection
+
+if not SRE.exists():
+    PythonPortable()
+
+display(Image(url=IMG))
+clear_output(wait=True)
 
 CD(HOME)
 webui_misc()
