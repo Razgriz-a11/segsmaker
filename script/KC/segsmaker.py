@@ -76,19 +76,19 @@ def webui_launch(launch_args, skip_comfyui_check, ngrok_token=None, zrok_token=N
         end_time = int(time.time()) + 3600
         SyS(f"echo -n {end_time} > {timer}")
 
-    launch_args += ' --enable-insecure-extension-access --disable-console-progressbars --theme dark'
+        launch_args += ' --enable-insecure-extension-access --disable-console-progressbars --theme dark'
 
-    if ENVNAME == 'Kaggle':
-        launch_args += f' --encrypt-pass={PW}'
-    else:
-        if '--share' not in launch_args:
-            launch_args += ' --share'
+        if ENVNAME == 'Kaggle':
+            launch_args += f' --encrypt-pass={PW}'
+        else:
+            if '--share' not in launch_args:
+                launch_args += ' --share'
 
-    if ui == 'Forge':
-        FT = CWD / "FT.txt"
-        if not FT.exists():
-            SyS('pip uninstall -qy transformers')
-            FT.write_text("blyat")
+        if ui == 'Forge':
+            FT = CWD / "FT.txt"
+            if not FT.exists():
+                SyS('pip uninstall -qy transformers')
+                FT.write_text("blyat")
 
     if ui == 'ComfyUI' and not skip_comfyui_check:
         SyS('python3 apotek.py')
@@ -105,7 +105,6 @@ def webui_launch(launch_args, skip_comfyui_check, ngrok_token=None, zrok_token=N
     pinggy = f'ssh -o StrictHostKeyChecking=no -p 80 -R0:localhost:{port} a.pinggy.io'
     ngrok = f'ngrok http http://localhost:{port} --log stdout'
     zrok = f'zrok share public localhost:{port} --headless'
-    localtunnel = f'lt --port {port}'  # Added LocalTunnel command
 
     Alice_Synthesis_Thirty = Alice_Zuberg(port)
     Alice_Synthesis_Thirty.logger.setLevel(logging.DEBUG)
@@ -113,7 +112,6 @@ def webui_launch(launch_args, skip_comfyui_check, ngrok_token=None, zrok_token=N
     if not (ngrok_token or zrok_token):
         Alice_Synthesis_Thirty.add_tunnel(command=cloudflared, name='Cloudflared', pattern=r"[\w-]+\.trycloudflare\.com")
         Alice_Synthesis_Thirty.add_tunnel(command=pinggy, name='Pinggy', pattern=r"https://[\w-]+\.a\.free\.pinggy\.link")
-        Alice_Synthesis_Thirty.add_tunnel(command=localtunnel, name='LocalTunnel', pattern=r"https://[\w-]+\.loca\.lt")  # Added LocalTunnel
 
     if ngrok_token:
         NGROK_auth(ngrok_token)
