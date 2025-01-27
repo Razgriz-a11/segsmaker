@@ -106,6 +106,7 @@ def webui_launch(launch_args, skip_comfyui_check, ngrok_token=None, zrok_token=N
 
     cloudflared = f'cl tunnel --url localhost:{port}'
     pinggy = f'ssh -o StrictHostKeyChecking=no -p 80 -R0:localhost:{port} a.pinggy.io'
+    localtunnel = f'lt --port {port}'
     ngrok = f'ngrok http http://localhost:{port} --log stdout'
     zrok = f'zrok share public localhost:{port} --headless'
 
@@ -115,6 +116,7 @@ def webui_launch(launch_args, skip_comfyui_check, ngrok_token=None, zrok_token=N
     if not (ngrok_token or zrok_token):
         Alice_Synthesis_Thirty.add_tunnel(command=cloudflared, name='Cloudflared', pattern=r"[\w-]+\.trycloudflare\.com")
         Alice_Synthesis_Thirty.add_tunnel(command=pinggy, name='Pinggy', pattern=r"https://[\w-]+\.a\.free\.pinggy\.link")
+        Alice_Synthesis_Thirty.add_tunnel(command=localtunnel, name='LocalTunnel', pattern=r"https://[\w-]+\.loca\.lt") 
 
     if ngrok_token:
         NGROK_auth(ngrok_token)
