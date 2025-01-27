@@ -180,6 +180,13 @@ def install_tunnel():
     SyS(f'wget -qO {USR}/cl https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64')
     SyS(f'chmod +x {USR}/cl')
 
+    # Install Node.js and npm if not present
+    if SyS('command -v node >/dev/null 2>&1') != 0:
+        SyS('sudo apt-get update -qq && sudo apt-get install -y nodejs npm >/dev/null 2>&1')
+    
+    # Install LocalTunnel globally
+    SyS('sudo npm install -g localtunnel >/dev/null 2>&1')
+
     bins = {
         "zrok": {
             "bin": USR / 'zrok',
