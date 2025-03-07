@@ -61,7 +61,7 @@ def ZROK_enable(token):
         SyS(f'zrok enable {token}')
         print()
 
-def webui_launch(launch_args, skip_comfyui_check, ngrok_token=None, zrok_token=None):
+def webui_launch(launch_args, skip_comfyui_check, ngrok_token=None, zrok_token=None, use_localtunnel=False, localtunnel_subdomain=None):
     config = json.load(MD.open('r'))
     ui = config.get('ui')
 
@@ -100,10 +100,16 @@ def webui_launch(launch_args, skip_comfyui_check, ngrok_token=None, zrok_token=N
     ngrok = f'ngrok http http://localhost:{port} --log stdout'
     zrok = f'zrok share public localhost:{port} --headless'
 
+    # Comando para localtunnel
+    if localtunnel_subdomain:
+        localtunnel_cmd = f'lt --port {port} --subdomain {localtunnel_subdomain}'
+    else:
+        localtunnel_cmd = f'lt --port {port}'
+
     Alice_Synthesis_Thirty = Alice_Zuberg(port)
     Alice_Synthesis_Thirty.logger.setLevel(logging.DEBUG)
 
-    if not (ngrok_token or zrok_token):
+    if not (ngrok_token or zrok_token or use_localtunnel):
         Alice_Synthesis_Thirty.add_tunnel(command=pinggy, name='Pinggy', pattern=r"https://[\w-]+\.a\.free\.pinggy\.link")
         Alice_Synthesis_Thirty.add_tunnel(command=cloudflared, name='Cloudflared', pattern=r"[\w-]+\.trycloudflare\.com")
 
@@ -115,6 +121,11 @@ def webui_launch(launch_args, skip_comfyui_check, ngrok_token=None, zrok_token=N
         ZROK_enable(zrok_token)
         Alice_Synthesis_Thirty.add_tunnel(command=zrok, name='ZROK', pattern=r"https://[\w-]+\.share\.zrok\.io")
 
+    if use_localtunnel:
+        # Instalar localtunnel si no está instalado
+        SyS('npm list -g localtunnel || npm install -g localtunnel')
+        Alice_Synthesis_Thirty.add_tunnel(command=localtunnel_cmd, name='LocalTunnel', pattern=r"https://[\w-]+\.loca\.lt")
+
     with Alice_Synthesis_Thirty:
         SyS(cmd)
 
@@ -123,12 +134,14 @@ if __name__ == '__main__':
     parser.add_argument('--skip-comfyui-check', action='store_true', help='Skip checking custom node dependencies for ComfyUI')
     parser.add_argument('--N', type=str, help='NGROK tunnel (pass a token or leave empty)', default=None)
     parser.add_argument('--Z', type=str, help='ZROK tunnel (pass a token or leave empty)', default=None)
+    parser.add_argument('--LT', action='store_true', help='Use LocalTunnel for exposing the server')
+    parser.add_argument('--LT-subdomain', type=str, help='Specify a custom subdomain for LocalTunnel', default=None)
 
     args, unknown = parser.parse_known_args()
     launch_args = ' '.join(unknown)
 
     try:
         Trashing()
-        webui_launch(launch_args, args.skip_comfyui_check, args.N, args.Z)
+        webui_launch(launch_args, args.skip_comfyui_check, args.N, args.Z, args.LT, args.LT_subdomain)
     except KeyboardInterrupt:
         pass
