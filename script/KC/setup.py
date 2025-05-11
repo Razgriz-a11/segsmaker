@@ -99,7 +99,7 @@ def prevent_silly():
 
     Muzik = f"""
     <iframe width="640" height="360"
-      src="https://www.youtube.com/embed/{arg4}?autoplay=1"
+      src=""
       frameborder="0"
       referrerpolicy="strict-origin-when-cross-origin"
       allowfullscreen>
